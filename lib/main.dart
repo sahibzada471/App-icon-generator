@@ -81,7 +81,7 @@ class _SecondState extends State<Second> with SingleTickerProviderStateMixin {
                   Icon(Icons.window),
                   SizedBox(width: 10),
                   Text(
-                    "Image Sets",
+                    "Splash Icon",
                     style: TextStyle(fontSize: 19),
                   ),
                 ],
