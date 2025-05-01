@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../Images_set.dart';
+import 'Api_services.dart';
 
 class AppIcons extends StatefulWidget {
   const AppIcons({super.key});
@@ -10,16 +12,16 @@ class AppIcons extends StatefulWidget {
 }
 
 class _AppIconsState extends State<AppIcons> {
-  // Variable to hold the selected image file
   File? _selectedImage;
+  bool isChecked1 = false; // iPhone
+  bool isChecked2 = false; // Android
+  bool isChecked3 = false; // iPad
+  bool isChecked4 = false; // macOS
+  bool isChecked5 = false; // watchOS (new separate checkbox)
+  final IconGeneratorService _iconService = IconGeneratorService();
+  final TextEditingController _outputNameController = TextEditingController();
+  bool _isGenerating = false;
 
-  // State variables for checkboxes
-  bool isChecked1 = false;
-  bool isChecked2 = false;
-  bool isChecked3 = false;
-  bool isChecked4 = false;
-
-  // Method to pick an image from gallery
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedImage =
@@ -27,16 +29,93 @@ class _AppIconsState extends State<AppIcons> {
 
     if (pickedImage != null) {
       setState(() {
-        _selectedImage = File(pickedImage.path); // Update the image
+        _selectedImage = File(pickedImage.path);
       });
+    }
+  }
+
+  Future<void> _handleGenerateIcons() async {
+    if (_selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image first')),
+      );
+      return;
+    }
+
+    final platforms = [
+      if (isChecked1) 'iphone',
+      if (isChecked2) 'android',
+      if (isChecked3) 'ipad',
+      if (isChecked4) 'macos',
+      if (isChecked5) 'watchos', // Added watchOS platform
+    ];
+
+    if (platforms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one platform')),
+      );
+      return;
+    }
+
+    if (_isGenerating) return;
+    setState(() => _isGenerating = true);
+
+    final currentContext = context;
+    
+    showDialog(
+      context: currentContext,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final result = await _iconService.generateIcons(
+        imageFile: _selectedImage!,
+        platforms: platforms,
+        outputName: _outputNameController.text.isEmpty 
+            ? 'app-icons' 
+            : _outputNameController.text,
+      );
+
+      if (mounted) {
+        Navigator.of(currentContext).pop();
+      }
+
+      if (result['success'] == true) {
+        await _iconService.downloadAndSaveZip(
+          context,
+          'outputDirectory', // Replace with the actual directory path
+          'fileName.zip',    // Replace with the desired file name
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${result['error']}'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(currentContext).pop();
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGenerating = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // final h = MediaQuery.of(context).size.height;
-    // final w = MediaQuery.of(context).size.width;
-
     double h = MediaQuery.of(context).size.height;
     double w = MediaQuery.of(context).size.width;
 
@@ -49,16 +128,15 @@ class _AppIconsState extends State<AppIcons> {
               child: CustomPaint(
                 painter: DottedBorderPainter(),
                 child: Container(
-                  height: h * 0.5, // 50% of screen height
-                  width: w * 0.7, // 60% of screen width
+                  height: h * 0.5,
+                  width: w * 0.7,
                   color: Colors.white,
                   child: Center(
                     child: _selectedImage == null
                         ? Column(
                             children: [
                               GestureDetector(
-                                onTap:
-                                    _pickImage, // Trigger image picker when tapped
+                                onTap: _pickImage,
                                 child: const Icon(
                                   Icons.photo_outlined,
                                   size: 70.0,
@@ -79,8 +157,8 @@ class _AppIconsState extends State<AppIcons> {
                                       borderRadius: BorderRadius.circular(15),
                                       color: Colors.blueGrey,
                                     ),
-                                    height: h * 0.3, // 30% of screen height
-                                    width: w * 0.6, // 50% of screen width
+                                    height: h * 0.3,
+                                    width: w * 0.6,
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
@@ -96,14 +174,12 @@ class _AppIconsState extends State<AppIcons> {
                                     right: 0,
                                     bottom: 0,
                                     child: Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 20.0),
+                                      padding: const EdgeInsets.only(bottom: 20.0),
                                       child: Center(
                                         child: Padding(
                                           padding: const EdgeInsets.all(8.0),
                                           child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(16),
+                                            borderRadius: BorderRadius.circular(16),
                                             child: Image.asset(
                                               'assets/ai-generated.png',
                                               fit: BoxFit.contain,
@@ -144,7 +220,7 @@ class _AppIconsState extends State<AppIcons> {
                   const Text(
                     "Drag or select an app icon image\n(1024 x 1024) to generate different app icon\n sizes for all platforms",
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
@@ -160,17 +236,16 @@ class _AppIconsState extends State<AppIcons> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            // Optional spacing between text and divider
                             Expanded(
                               child: Divider(
-                                color: Color.fromARGB(
-                                    255, 240, 235, 235), // Color of the divider
-                                thickness: 2, // Thickness of the divider
+                                color: Color.fromARGB(255, 240, 235, 235),
+                                thickness: 2,
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 10),
+                        // iPhone Checkbox
                         Row(
                           children: [
                             Checkbox(
@@ -182,49 +257,49 @@ class _AppIconsState extends State<AppIcons> {
                               },
                             ),
                             RichText(
-                              text: TextSpan(
-                                style: DefaultTextStyle.of(context).style,
+                              text: const TextSpan(
+                                style: TextStyle(color: Colors.black),
                                 children: <TextSpan>[
-                                  const TextSpan(
+                                  TextSpan(
                                     text: "iPhone",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
+                                    style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  const TextSpan(
-                                    text: "-11 different file and size",
+                                  TextSpan(
+                                    text: " - 11 different file and size",
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
+                        // watchOS Checkbox (now separate)
                         Row(
                           children: [
                             Checkbox(
-                              value: isChecked2,
+                              value: isChecked5,
                               onChanged: (value) {
                                 setState(() {
-                                  isChecked2 = value!;
+                                  isChecked5 = value!;
                                 });
                               },
                             ),
                             RichText(
-                              text: TextSpan(
-                                style: DefaultTextStyle.of(context).style,
+                              text: const TextSpan(
+                                style: TextStyle(color: Colors.black),
                                 children: <TextSpan>[
-                                  const TextSpan(
-                                    text: "Android",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
+                                  TextSpan(
+                                    text: "watchOS",
+                                    style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  const TextSpan(
-                                    text: "-04 different file and size",
+                                  TextSpan(
+                                    text: " - 08 different file and size",
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
+                        // iPad Checkbox
                         Row(
                           children: [
                             Checkbox(
@@ -236,22 +311,22 @@ class _AppIconsState extends State<AppIcons> {
                               },
                             ),
                             RichText(
-                              text: TextSpan(
-                                style: DefaultTextStyle.of(context).style,
+                              text: const TextSpan(
+                                style: TextStyle(color: Colors.black),
                                 children: <TextSpan>[
-                                  const TextSpan(
+                                  TextSpan(
                                     text: "iPad",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
+                                    style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  const TextSpan(
-                                    text: "-05 different file and size",
+                                  TextSpan(
+                                    text: " - 05 different file and size",
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
+                        // macOS Checkbox
                         Row(
                           children: [
                             Checkbox(
@@ -263,16 +338,15 @@ class _AppIconsState extends State<AppIcons> {
                               },
                             ),
                             RichText(
-                              text: TextSpan(
-                                style: DefaultTextStyle.of(context).style,
+                              text: const TextSpan(
+                                style: TextStyle(color: Colors.black),
                                 children: <TextSpan>[
-                                  const TextSpan(
-                                    text: "Web",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
+                                  TextSpan(
+                                    text: "macOS",
+                                    style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  const TextSpan(
-                                    text: "-03 different file and size",
+                                  TextSpan(
+                                    text: " - 11 different file and size",
                                   ),
                                 ],
                               ),
@@ -292,44 +366,36 @@ class _AppIconsState extends State<AppIcons> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                SizedBox(
-                                  width: 9,
-                                ),
-                                // Optional spacing between text and divider
+                                SizedBox(width: 9),
                                 Expanded(
                                   child: Divider(
-                                    color: Color.fromARGB(255, 240, 235,
-                                        235), // Color of the divider
-                                    thickness: 2, // Thickness of the divider
+                                    color: Color.fromARGB(255, 240, 235, 235),
+                                    thickness: 2,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(
-                                height:
-                                    10), // Add some spacing between the text and the checkbox
+                            const SizedBox(height: 10),
+                            // Android Checkbox (now separate)
                             Row(
                               children: [
                                 Checkbox(
-                                  value:
-                                      isChecked2, // This is the boolean value controlling the checkbox state
+                                  value: isChecked2,
                                   onChanged: (value) {
                                     setState(() {
-                                      isChecked2 =
-                                          value!; // Update the checkbox state
+                                      isChecked2 = value!;
                                     });
                                   },
                                 ),
                                 RichText(
-                                  text: TextSpan(
-                                    style: DefaultTextStyle.of(context).style,
+                                  text: const TextSpan(
+                                    style: TextStyle(color: Colors.black),
                                     children: <TextSpan>[
-                                      const TextSpan(
+                                      TextSpan(
                                         text: "Android",
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold),
+                                        style: TextStyle(fontWeight: FontWeight.bold),
                                       ),
-                                      const TextSpan(
+                                      TextSpan(
                                         text: "-04 different file and size",
                                       ),
                                     ],
@@ -343,78 +409,55 @@ class _AppIconsState extends State<AppIcons> {
                                   height: 30,
                                   width: 70,
                                   decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: Colors.black), // Black border
-                                    borderRadius: BorderRadius.circular(
-                                        5), // Optional rounded corners
+                                    border: Border.all(color: Colors.black),
+                                    borderRadius: BorderRadius.circular(5),
                                   ),
-                                  alignment: Alignment
-                                      .center, // Centers the text inside
-                                  child: Text(
+                                  alignment: Alignment.center,
+                                  child: const Text(
                                     'File name',
-                                    style: TextStyle(
-                                        color: Colors
-                                            .black), // Ensures text is visible
+                                    style: TextStyle(color: Colors.black),
                                   ),
                                 ),
-                                // Spacing between elements
                                 SizedBox(
                                   height: 30,
-                                  width:
-                                      130, // Set the desired width for the TextField
+                                  width: 130,
                                   child: TextField(
-                                    decoration: InputDecoration(
-                                      border:
-                                          OutlineInputBorder(), // Adds a border to the text field
+                                    controller: _outputNameController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
                                       hintText: 'Enter file name',
                                       contentPadding: EdgeInsets.symmetric(
-                                          vertical: 5,
-                                          horizontal:
-                                              10), // Adjust padding for smaller height
+                                          vertical: 5, horizontal: 10),
                                     ),
-                                    style: TextStyle(
-                                        fontSize:
-                                            14), // Adjust text size if needed
+                                    style: const TextStyle(fontSize: 14),
                                   ),
                                 ),
                               ],
                             ),
-                            SizedBox(
-                              height: 10,
-                            ),
-                            Text("Change file name for all generated Android"),
-                            SizedBox(
-                              height: 10,
-                            ),
-                            Text("Image"),
+                            const SizedBox(height: 10),
+                            const Text("Change file name for all generated Android"),
+                            const SizedBox(height: 10),
+                            const Text("Image"),
                             Center(
                               child: ElevatedButton(
-                                onPressed: () {},
+                                onPressed: _isGenerating ? null : _handleGenerateIcons,
                                 style: ElevatedButton.styleFrom(
-                                  minimumSize: Size(270, 36), // Decreased size
-                                  side: BorderSide(
-                                      color: Colors.black), // Adds border
+                                  minimumSize: const Size(270, 36),
+                                  side: const BorderSide(color: Colors.black),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                        5), // Optional rounded corners
+                                    borderRadius: BorderRadius.circular(5),
                                   ),
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4), // Adjusts padding
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                 ),
                                 child: Row(
-                                  mainAxisSize: MainAxisSize
-                                      .min, // Ensures the button takes minimal space
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.download_outlined,
-                                        size: 18), // Reduced icon size
-                                    SizedBox(
-                                        width:
-                                            5), // Space between icon and text
+                                    Icon(Icons.download_outlined, size: 18),
+                                    const SizedBox(width: 5),
                                     Text(
-                                      "Generate",
-                                      style: TextStyle(
-                                          fontSize: 14), // Smaller text
+                                      _isGenerating ? "Generating..." : "Generate",
+                                      style: const TextStyle(fontSize: 14),
                                     ),
                                   ],
                                 ),
@@ -425,7 +468,7 @@ class _AppIconsState extends State<AppIcons> {
                       ],
                     ),
                   ),
-                  SizedBox(
+                   SizedBox(
                     height: 30,
                   ),
                   Divider(
@@ -956,6 +999,7 @@ class _AppIconsState extends State<AppIcons> {
                       ],
                     ),
                   ),
+             
                 ],
               ),
             ),
@@ -966,60 +1010,3 @@ class _AppIconsState extends State<AppIcons> {
   }
 }
 
-class DottedBorderPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    Paint paint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    double dashWidth = 5;
-    double dashSpace = 5;
-    double startX = 0;
-
-    while (startX < size.width) {
-      canvas.drawLine(
-        Offset(startX, 0),
-        Offset(startX + dashWidth, 0),
-        paint,
-      );
-      startX += dashWidth + dashSpace;
-    }
-
-    double startY = 0;
-    while (startY < size.height) {
-      canvas.drawLine(
-        Offset(size.width, startY),
-        Offset(size.width, startY + dashWidth),
-        paint,
-      );
-      startY += dashWidth + dashSpace;
-    }
-
-    startX = size.width;
-    while (startX > 0) {
-      canvas.drawLine(
-        Offset(startX, size.height),
-        Offset(startX - dashWidth, size.height),
-        paint,
-      );
-      startX -= dashWidth + dashSpace;
-    }
-
-    startY = size.height;
-    while (startY > 0) {
-      canvas.drawLine(
-        Offset(0, startY),
-        Offset(0, startY - dashWidth),
-        paint,
-      );
-      startY -= dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
-  }
-}

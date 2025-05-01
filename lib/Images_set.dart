@@ -242,7 +242,8 @@ class _ImageScreenState extends State<ImageScreen> {
                     ],
                   ),
                 ),
-              ), SizedBox(
+              ), 
+              SizedBox(
                     height: 30,
                   ),
                   Divider(
